@@ -862,122 +862,310 @@ elif st.session_state['page'] == 'Продукт':
 
 
 # ---------------------------
-# --- MODELS & ANALYTICS ---
+# --- MODELS & ANALYTICS (v3: карточки без GET, остаёмся в разделе) ---
 # ---------------------------
 elif st.session_state['page'] == 'Модели и аналитика':
-    st.title("Модели и аналитика — Опыт D1 и D2 (Айран)")
-    st.write("Витрина регрессионных подходов и итоговых графиков (пример).")
+    st.title("Модели и аналитика")
+    st.caption("Выберите продукт, чтобы открыть витрину аналитики и моделей.")
 
-    # =========================
-    # 1) Вводные таблицы
-    # =========================
-    st.subheader("Вводные данные")
-    c1, c2 = st.columns(2)
+    # состояние выбора внутри раздела аналитики
+    if 'analytics_selected_product' not in st.session_state:
+        st.session_state['analytics_selected_product'] = None
 
-    data_D1 = {
-        "Группа": ["Контроль", "Опыт 1 (добавка 1)", "Опыт 2 (добавка 2)"],
-        "pH": [3.69, 3.65, 3.51],
-        "°T": [91, 92, 97],
-        "LAB (КОЕ/см³)": [1.2e6, 1.6e6, 2.1e6],
-    }
-    df_D1 = pd.DataFrame(data_D1)
-    df_D1["log10(LAB)"] = np.log10(df_D1["LAB (КОЕ/см³)"].astype(float))
-    with c1:
-        st.markdown("**Таблица 4. D1 — Айран (7 суток)**")
-        st.dataframe(df_D1, use_container_width=True)
+    # список продуктов (как на Главной)
+    fixed_products = [
+        {"product_id": 1, "name": "Молоко (коровье)",       "type": "Молоко",        "source": "Коровье", "description": "Свежее пастеризованное молоко"},
+        {"product_id": 2, "name": "Молоко (козье)",         "type": "Молоко",        "source": "Козье",   "description": "Натуральное фермерское козье молоко"},
+        {"product_id": 3, "name": "Сары ірімшік (коровье)", "type": "Сыр",           "source": "Коровье", "description": "Твёрдый сыр традиционной выработки"},
+        {"product_id": 4, "name": "Сары ірімшік (козье)",   "type": "Сыр",           "source": "Козье",   "description": "Твёрдый сыр из козьего молока"},
+        {"product_id": 5, "name": "Айран",                  "type": "Кисломолочный", "source": "Коровье", "description": "Освежающий кисломолочный продукт"},
+    ]
+    display_products = []
+    if not products.empty and 'product_id' in products.columns:
+        for fp in fixed_products:
+            match = products[products['product_id'] == fp['product_id']]
+            display_products.append(match.iloc[0].to_dict() if not match.empty else fp)
+    else:
+        display_products = fixed_products
 
-    data_D2 = {
-        "Группа": ["Контроль", "Опыт 1", "Опыт 2"],
-        "Белок %": [1.96, 2.05, 2.23],
-        "Углеводы %": [2.73, 3.06, 3.85],
-        "Жир %": [2.05, 1.93, 2.71],
-        "Влага %": [92.56, 92.26, 90.40],
-        "АОА вод. (мг/г)": [0.10, 0.15, 0.12],
-        "АОА жир (мг/г)": [0.031, 0.043, 0.041],
-        "VitC (мг/100г)": [0.880, 0.904, 0.897],
-    }
-    df_D2 = pd.DataFrame(data_D2)
-    with c2:
-        st.markdown("**Таблица 5. D2 — Айран (14 суток)**")
-        st.dataframe(df_D2, use_container_width=True)
+    # стили карточек
+    st.markdown(
+        """
+        <style>
+          .product-card {
+              background: linear-gradient(135deg, #fafafa, #f3f4f6);
+              border-radius: 16px;
+              padding: 18px;
+              box-shadow: 0 6px 16px rgba(0,0,0,0.08);
+              transition: all 0.2s ease;
+              color: #111827;
+              border: 1px solid #e5e7eb;
+              margin-bottom: 10px;
+          }
+          .product-title { font-weight: 600; font-size: 1.05rem; margin-bottom: 4px; }
+          .product-meta { font-size: 0.9rem; color: #374151; margin-bottom: 8px; }
+          .product-desc { font-size: 0.92rem; color: #4b5563; margin-bottom: 10px; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
-    st.markdown("---")
-    st.subheader("Итоговые графики")
+    # карточки (кнопка под карточкой -> без GET)
+    st.subheader("Продукты")
+    cols = st.columns(2)
+    for i, p in enumerate(display_products):
+        with cols[i % 2]:
+            st.markdown(
+                f"""
+                <div class="product-card">
+                  <div class="product-title">{p["name"]}</div>
+                  <div class="product-meta">Тип: {p["type"]} • Источник: {p["source"]}</div>
+                  <div class="product-desc">{p["description"]}</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+            if st.button("Открыть аналитику", key=f"open_analytics_{int(p['product_id'])}", use_container_width=True):
+                st.session_state['analytics_selected_product'] = int(p["product_id"])
+                st.session_state['page'] = 'Модели и аналитика'   # жёстко остаёмся в разделе
+                st.rerun()
 
-    tab1, tab2, tab3 = st.tabs(["D1: кислотность и LAB", "D2: состав и свойства", "Моделирование pH"])
+    # ===== отрисовщики аналитики =====
+    def render_airan_analytics():
+        st.markdown("---")
+        st.header("Айран — аналитика и модели")
 
-    with tab1:
-        fig, ax1 = plt.subplots(figsize=(8,5))
-        ax1.bar(df_D1["Группа"], df_D1["pH"])
-        ax1.set_ylabel("pH"); ax1.set_title("D1 (7 суток): кислотность и рост LAB")
-        ax2 = ax1.twinx(); ax2.plot(df_D1["Группа"], df_D1["log10(LAB)"], marker="o", linewidth=2)
-        ax2.set_ylabel("log10(LAB)")
-        st.pyplot(fig, use_container_width=True)
+        st.subheader("Вводные данные")
+        c1, c2 = st.columns(2)
 
-    with tab2:
-        df_comp = df_D2.melt(id_vars="Группа",
-                             value_vars=["Белок %", "Углеводы %", "Жир %"],
-                             var_name="Показатель", value_name="Значение")
-        fig1, ax = plt.subplots(figsize=(8,5))
-        groups = df_comp["Группа"].unique()
-        cats = df_comp["Показатель"].unique()
-        x = np.arange(len(groups))
-        width = 0.8 / len(cats)
-        for i, cat in enumerate(cats):
-            vals = df_comp[df_comp["Показатель"] == cat]["Значение"].values
-            ax.bar(x + i*width - (len(cats)-1)*width/2, vals, width=width, label=cat)
-        ax.set_xticks(x); ax.set_xticklabels(groups)
-        ax.set_ylabel("Процент содержания (%)"); ax.set_title("D2 (14 суток): состав айрана"); ax.legend()
-        st.pyplot(fig1, use_container_width=True)
+        data_D1 = {
+            "Группа": ["Контроль", "Опыт 1 (добавка 1)", "Опыт 2 (добавка 2)"],
+            "pH": [3.69, 3.65, 3.51],
+            "°T": [91, 92, 97],
+            "LAB (КОЕ/см³)": [1.2e6, 1.6e6, 2.1e6],
+        }
+        df_D1 = pd.DataFrame(data_D1)
+        df_D1["log10(LAB)"] = np.log10(df_D1["LAB (КОЕ/см³)"].astype(float))
+        with c1:
+            st.markdown("**Таблица 4. D1 — Айран (7 суток)**")
+            st.dataframe(df_D1, use_container_width=True)
 
-        fig2, axes = plt.subplots(1, 2, figsize=(12,5))
-        axes[0].bar(df_D2["Группа"], df_D2["АОА вод. (мг/г)"])
-        axes[0].set_title("АОА (водная фаза)"); axes[0].set_ylabel("АОА, мг/г")
-        axes[1].bar(df_D2["Группа"], df_D2["VitC (мг/100г)"])
-        axes[1].set_title("Витамин C"); axes[1].set_ylabel("VitC, мг/100г")
-        plt.suptitle("D2: функциональные свойства", fontsize=14)
-        st.pyplot(fig2, use_container_width=True)
+        data_D2 = {
+            "Группа": ["Контроль", "Опыт 1", "Опыт 2"],
+            "Белок %": [1.96, 2.05, 2.23],
+            "Углеводы %": [2.73, 3.06, 3.85],
+            "Жир %": [2.05, 1.93, 2.71],
+            "Влага %": [92.56, 92.26, 90.40],
+            "АОА вод. (мг/г)": [0.10, 0.15, 0.12],
+            "АОА жир (мг/г)": [0.031, 0.043, 0.041],
+            "VitC (мг/100г)": [0.880, 0.904, 0.897],
+        }
+        df_D2 = pd.DataFrame(data_D2)
+        with c2:
+            st.markdown("**Таблица 5. D2 — Айран (14 суток)**")
+            st.dataframe(df_D2, use_container_width=True)
 
-    with tab3:
-        time = np.array([2, 4, 6, 8, 10])
-        ph_control = np.array([4.515, 4.433, 4.386, 4.352, 4.325])
-        ph_exp1 = np.array([4.464, 4.394, 4.352, 4.323, 4.300])
-        ph_exp2 = np.array([4.419, 4.333, 4.282, 4.246, 4.218])
+        st.markdown("---")
+        st.subheader("Итоговые графики")
+        tab1, tab2, tab3 = st.tabs(["D1: кислотность и LAB", "D2: состав и свойства", "Моделирование pH"])
 
-        st.markdown("**Динамика pH (контроль, опыт 1, опыт 2)**")
-        fig0, ax0 = plt.subplots(figsize=(8,5))
-        ax0.plot(time, ph_control, 'o-', label='Контроль')
-        ax0.plot(time, ph_exp1, 's-', label='Опыт 1')
-        ax0.plot(time, ph_exp2, '^-', label='Опыт 2')
-        ax0.set_xlabel('Время ферментации, ч'); ax0.set_ylabel('pH')
-        ax0.set_title('Сравнение динамики pH (2–10 ч)')
-        ax0.grid(True, alpha=0.3); ax0.legend()
-        st.pyplot(fig0, use_container_width=True)
+        with tab1:
+            fig, ax1 = plt.subplots(figsize=(8,5))
+            ax1.bar(df_D1["Группа"], df_D1["pH"])
+            ax1.set_ylabel("pH"); ax1.set_title("D1 (7 суток): кислотность и рост LAB")
+            ax2 = ax1.twinx(); ax2.plot(df_D1["Группа"], df_D1["log10(LAB)"], marker="o", linewidth=2)
+            ax2.set_ylabel("log10(LAB)")
+            st.pyplot(fig, use_container_width=True)
 
-        st.markdown("**Модели для pH(t): логарифмическая и гиперболическая (без SciPy)**")
-        t_fit = np.array([1, 2, 3, 4, 5, 6, 8, 10], dtype=float)
-        pH_exp = np.array([4.65, 4.50, 4.33, 4.20, 4.05, 3.90, 3.78, 3.70], dtype=float)
+        with tab2:
+            df_comp = df_D2.melt(id_vars="Группа",
+                                 value_vars=["Белок %", "Углеводы %", "Жир %"],
+                                 var_name="Показатель", value_name="Значение")
+            fig1, ax = plt.subplots(figsize=(8,5))
+            groups = df_comp["Группа"].unique()
+            cats = df_comp["Показатель"].unique()
+            x = np.arange(len(groups))
+            width = 0.8 / len(cats)
+            for i, cat in enumerate(cats):
+                vals = df_comp[df_comp["Показатель"] == cat]["Значение"].values
+                ax.bar(x + i*width - (len(cats)-1)*width/2, vals, width=width, label=cat)
+            ax.set_xticks(x); ax.set_xticklabels(groups)
+            ax.set_ylabel("Процент содержания (%)"); ax.set_title("D2 (14 суток): состав айрана"); ax.legend()
+            st.pyplot(fig1, use_container_width=True)
 
-        ln_t = np.log(t_fit)
-        c1_, c0_ = np.polyfit(ln_t, pH_exp, 1)  # y = c1*ln(t) + c0
-        alpha = c0_; beta = -c1_
+            fig2, axes = plt.subplots(1, 2, figsize=(12,5))
+            axes[0].bar(df_D2["Группа"], df_D2["АОА вод. (мг/г)"])
+            axes[0].set_title("АОА (водная фаза)"); axes[0].set_ylabel("АОА, мг/г")
+            axes[1].bar(df_D2["Группа"], df_D2["VitC (мг/100г)"])
+            axes[1].set_title("Витамин C"); axes[1].set_ylabel("VitC, мг/100г")
+            plt.suptitle("D2: функциональные свойства", fontsize=14)
+            st.pyplot(fig2, use_container_width=True)
 
-        inv_t = 1.0 / t_fit
-        m, a_intercept = np.polyfit(inv_t, pH_exp, 1)  # y = m*(1/t) + a
-        a = a_intercept; b = m
+        with tab3:
+            time = np.array([2, 4, 6, 8, 10])
+            ph_control = np.array([4.515, 4.433, 4.386, 4.352, 4.325])
+            ph_exp1 = np.array([4.464, 4.394, 4.352, 4.323, 4.300])
+            ph_exp2 = np.array([4.419, 4.333, 4.282, 4.246, 4.218])
 
-        t_pred = np.linspace(1, 10, 100)
-        pH_log_pred = alpha - beta * np.log(t_pred)
-        pH_inv_pred = a + b / t_pred
+            fig0, ax0 = plt.subplots(figsize=(8,5))
+            ax0.plot(time, ph_control, 'o-', label='Контроль')
+            ax0.plot(time, ph_exp1, 's-', label='Опыт 1')
+            ax0.plot(time, ph_exp2, '^-', label='Опыт 2')
+            ax0.set_xlabel('Время ферментации, ч'); ax0.set_ylabel('pH')
+            ax0.set_title('Сравнение динамики pH (2–10 ч)')
+            ax0.grid(True, alpha=0.3); ax0.legend()
+            st.pyplot(fig0, use_container_width=True)
 
-        fig1, ax1 = plt.subplots(figsize=(8,5))
-        ax1.scatter(t_fit, pH_exp, color='black', label='Экспериментальные точки')
-        ax1.plot(t_pred, pH_log_pred, label='Логарифмическая  pH = α - β ln(t)')
-        ax1.plot(t_pred, pH_inv_pred, linestyle='--', label='Гиперболическая  pH = a + b/t')
-        ax1.set_xlabel('Время, ч'); ax1.set_ylabel('pH'); ax1.grid(True, alpha=0.3)
-        ax1.set_title('Моделирование динамики pH при ферментации айрана')
-        ax1.legend()
-        st.pyplot(fig1, use_container_width=True)
+            t_fit = np.array([1, 2, 3, 4, 5, 6, 8, 10], dtype=float)
+            pH_exp = np.array([4.65, 4.50, 4.33, 4.20, 4.05, 3.90, 3.78, 3.70], dtype=float)
+            ln_t = np.log(t_fit)
+            c1_, c0_ = np.polyfit(ln_t, pH_exp, 1)  # y = c1*ln(t) + c0
+            alpha = c0_; beta = -c1_
+            inv_t = 1.0 / t_fit
+            m, a_intercept = np.polyfit(inv_t, pH_exp, 1)  # y = m*(1/t) + a
+            a = a_intercept; b = m
+            t_pred = np.linspace(1, 10, 100)
+            pH_log_pred = alpha - beta * np.log(t_pred)
+            pH_inv_pred = a + b / t_pred
+
+            fig1, ax1 = plt.subplots(figsize=(8,5))
+            ax1.scatter(t_fit, pH_exp, color='black', label='Экспериментальные точки')
+            ax1.plot(t_pred, pH_log_pred, label='Логарифмическая  pH = α - β ln(t)')
+            ax1.plot(t_pred, pH_inv_pred, linestyle='--', label='Гиперболическая  pH = a + b/t')
+            ax1.set_xlabel('Время, ч'); ax1.set_ylabel('pH'); ax1.grid(True, alpha=0.3)
+            ax1.set_title('Моделирование динамики pH при ферментации айрана')
+            ax1.legend()
+            st.pyplot(fig1, use_container_width=True)
+
+    def render_cheese_analytics():
+        st.markdown("---")
+        st.header("Сары ірімшік — аналитика и модели")
+
+        # ==== ваш код (с минимальными правками) ====
+        KPI_cow = {'M':24.63, 'Pro':11.43, 'Fat':35.06, 'Sol':75.36}
+        params = {'k_coag': 0.35, 'k_drain': 0.08, 'k_dry': 0.0018, 'n_page': 1.12}
+        experiments = [
+            {'name': 'Контроль', 'additive': 0.05,  'color': (0, 0.45, 0.74)},
+            {'name': 'Опыт-1',   'additive': 0.045, 'color': (0.85, 0.33, 0.1)}
+        ]
+
+        coag  = lambda t, k: 1 - np.exp(-k*t)
+        drain = lambda t, k, M0, Mmin: Mmin + (M0 - Mmin)*np.exp(-k*t)
+        # исправлена опечатка: добавлен знак умножения перед np.exp
+        pagef  = lambda t, k, n, M0, Mf: Mf + (M0 - Mf)*np.exp(-(k*t)*n)
+
+        # 1) Сравнение двух опытов — динамика влажности M(t)
+        t = np.linspace(0, 8, 200)
+        figA, axA = plt.subplots(figsize=(8,5))
+        axA.set_title('Сравнение двух опытов — динамика влажности M(t)')
+        axA.set_xlabel('Время, ч'); axA.set_ylabel('Влажность, %'); axA.grid(True)
+
+        for expi in experiments:
+            M0 = 55 - 100*expi['additive']
+            Mmin = KPI_cow['M']
+            M_drain = drain(t, params['k_drain']*(1+0.2*expi['additive']), M0, 35)
+            M_page  = pagef(t, params['k_dry']*(1+0.3*expi['additive']), params['n_page'], 35, Mmin)
+            M_total = (M_drain + M_page)/2
+            axA.plot(t, M_total, linewidth=2.2, color=expi['color'],
+                     label=f"{expi['name']} (добавка {100*expi['additive']:.1f}%)")
+            axA.text(t[-1], M_total[-1], f" {M_total[-1]:.1f}%", color=expi['color'], weight='bold')
+        axA.legend()
+        st.pyplot(figA, use_container_width=True)
+
+        # 2) Степень коагуляции α(t)
+        figB, axB = plt.subplots(figsize=(8,5))
+        axB.set_title('Степень коагуляции α(t)')
+        axB.set_xlabel('Время, ч'); axB.set_ylabel('α'); axB.grid(True)
+        for expi in experiments:
+            axB.plot(t, coag(t, params['k_coag']*(1+0.1*expi['additive'])),
+                     linewidth=2, color=expi['color'],
+                     label=f"{expi['name']} ({100*expi['additive']:.1f}%)")
+        axB.set_ylim([0,1]); axB.legend()
+        st.pyplot(figB, use_container_width=True)
+
+        # 3) Сушка (Page): M(t)
+        figC, axC = plt.subplots(figsize=(8,5))
+        axC.set_title('Сушка (Page): M(t)')
+        axC.set_xlabel('Время, ч'); axC.set_ylabel('Влажность, %'); axC.grid(True)
+        for expi in experiments:
+            axC.plot(t, pagef(t, params['k_dry']*(1+0.3*expi['additive']), params['n_page'], 35, KPI_cow['M']),
+                     linewidth=2, color=expi['color'],
+                     label=f"{expi['name']} ({100*expi['additive']:.1f}%)")
+        axC.set_ylim([34.8, 35.05]); axC.legend()
+        st.pyplot(figC, use_container_width=True)
+
+        # 4) Дренаж/пресс: влажность M(t)
+        t_drain = np.linspace(0, 1.5, 180)
+        M0_drain = 42.5; M_eq_press = 35.0
+        figD, axD = plt.subplots(figsize=(8,5))
+        axD.set_title('Дренаж/пресс: влажность M(t)')
+        axD.set_xlabel('Время, ч'); axD.set_ylabel('Влажность, %'); axD.grid(True)
+        for expi in experiments:
+            k_drain_eff = params['k_drain']*(1+0.25*expi['additive'])
+            M_drain_t = M_eq_press + (M0_drain - M_eq_press)*np.exp(-k_drain_eff*t_drain)
+            axD.plot(t_drain, M_drain_t, linewidth=2, color=expi['color'],
+                     label=f"{expi['name']} ({100*expi['additive']:.1f}%)")
+        axD.legend()
+        st.pyplot(figD, use_container_width=True)
+
+        # 5) Дренаж: относительная потеря сыворотки
+        figE, axE = plt.subplots(figsize=(8,5))
+        axE.set_title('Дренаж: относительная потеря сыворотки')
+        axE.set_xlabel('Время, ч'); axE.set_ylabel('Доля, отн. ед.'); axE.grid(True)
+        for expi in experiments:
+            k_drain_eff = params['k_drain']*(1+0.25*expi['additive'])
+            M_drain_t = M_eq_press + (M0_drain - M_eq_press)*np.exp(-k_drain_eff*t_drain)
+            loss_rel = (M0_drain - M_drain_t) / (M0_drain - M_eq_press)
+            axE.plot(t_drain, loss_rel, linewidth=2, color=expi['color'],
+                     label=f"{expi['name']} ({100*expi['additive']:.1f}%)")
+        axE.set_ylim([0,1]); axE.legend()
+        st.pyplot(figE, use_container_width=True)
+
+        # 6) Посол: NaCl на поверхности и в центре
+        t_salt = np.linspace(0, 2.0, 181)
+        C_brine = 0.20
+        k_surf_base, k_center_base = 2.2, 0.55
+        figF, axF = plt.subplots(figsize=(8,5))
+        axF.set_title('Посол: NaCl на поверхности и в центре')
+        axF.set_xlabel('Время, ч'); axF.set_ylabel('Массовая доля NaCl'); axF.grid(True)
+        for expi in experiments:
+            k_surf   = k_surf_base*(1+0.10*expi['additive'])
+            k_center = k_center_base*(1+0.10*expi['additive'])
+            C_surf   = C_brine*(1 - np.exp(-k_surf*t_salt))
+            C_center = C_brine*(1 - np.exp(-k_center*t_salt))
+            axF.plot(t_salt, C_surf, '-',  linewidth=2, color=expi['color'])
+            axF.plot(t_salt, C_center, '--', linewidth=2, color=expi['color'])
+        axF.axhline(C_brine, color='k', linestyle=':', label='Рассол 20%')
+        axF.legend()
+        st.pyplot(figF, use_container_width=True)
+
+    def render_empty_analytics(name: str):
+        st.markdown("---")
+        st.header(f"{name} — аналитика и модели")
+        st.info("Для этого продукта аналитика пока не настроена.")
+
+    # === если выбран продукт — показываем аналитику ===
+    sel_pid = st.session_state['analytics_selected_product']
+    if sel_pid is not None:
+        prod_meta = next((p for p in display_products if int(p["product_id"]) == int(sel_pid)), None)
+        c1, c2 = st.columns([3,1])
+        with c1:
+            st.subheader(f"Продукт: {prod_meta['name'] if prod_meta else f'ID {sel_pid}'}")
+            if prod_meta:
+                st.caption(f"Тип: {prod_meta.get('type','-')} • Источник: {prod_meta.get('source','-')}")
+        with c2:
+            if st.button("← Назад к продуктам", use_container_width=True):
+                st.session_state['analytics_selected_product'] = None
+                st.session_state['page'] = 'Модели и аналитика'
+                st.rerun()
+
+        if sel_pid == 5:
+            render_airan_analytics()
+        elif sel_pid in (3, 4):  # Сары ірімшік (коровье/козье)
+            render_cheese_analytics()
+        else:
+            render_empty_analytics(prod_meta['name'] if prod_meta else f"Продукт {sel_pid}")
+
 
 # ---------------------------
 # --- Footer ---
